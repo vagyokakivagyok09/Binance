@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A Kérődzés Útja – Multiplayer</title>
+
+<!-- Firebase SDK (compat mode - legmegbízhatóbb) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&family=Patrick+Hand&display=swap');
+:root{--cream:#f5ead0;--warm:#8b5e3c;--dark:#4a2e1a;--green:#6b9c5a;--amber:#d4833a;--red:#c0392b;--blue:#4a7fa5;--yellow:#e8c84a;--paper:#ede0c4;--ink:#2c1a0e;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#2a1a0a;font-family:'Patrick Hand',cursive;color:var(--ink);min-height:100vh;}
+.screen{display:none;min-height:100vh;}
+.screen.active{display:flex;}
+/* LOBBY */
+#lobby{flex-direction:column;align-items:center;justify-content:center;padding:20px;background:var(--paper);}
+.box{border:6px double var(--warm);background:var(--cream);padding:26px 32px;max-width:520px;width:100%;box-shadow:8px 8px 0 var(--warm);position:relative;text-align:center;}
+.box::before{content:'❧';font-size:22px;color:var(--warm);position:absolute;top:8px;left:10px;}
+.box::after{content:'❧';font-size:22px;color:var(--warm);position:absolute;top:8px;right:10px;}
+.gtitle{font-family:'Lora',serif;font-size:clamp(20px,5vw,32px);font-weight:700;color:var(--dark);}
+.gsub{font-family:'Lora',serif;font-style:italic;color:var(--warm);font-size:13px;margin-bottom:14px;}
+.cow{font-size:64px;display:block;margin:8px auto;animation:chew 2s ease-in-out infinite;}
+@keyframes chew{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+.tabs{display:flex;gap:6px;justify-content:center;margin:12px 0 8px;}
+.tab{padding:7px 20px;border:2px solid var(--warm);background:transparent;font-family:'Lora',serif;font-size:14px;cursor:pointer;color:var(--warm);}
+.tab.on{background:var(--warm);color:var(--cream);}
+.tc{display:none;width:100%;}
+.tc.on{display:block;}
+.fg{margin-bottom:10px;text-align:left;}
+.fg label{display:block;font-size:12px;color:var(--warm);margin-bottom:3px;font-family:'Lora',serif;}
+.fg input{width:100%;padding:9px 11px;border:2px solid var(--warm);background:var(--cream);font-family:'Patrick Hand',cursive;font-size:15px;color:var(--ink);outline:none;}
+.fg input:focus{border-color:var(--amber);}
+.animals{display:flex;gap:8px;justify-content:center;margin:8px 0;flex-wrap:wrap;}
+.aopt{width:50px;height:50px;border:3px solid var(--warm);background:var(--cream);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:4px;}
+.aopt.on{background:var(--amber);border-color:var(--dark);transform:scale(1.1);box-shadow:3px 3px 0 var(--dark);}
+.btn{background:var(--warm);color:var(--cream);border:3px solid var(--dark);padding:11px 28px;font-family:'Lora',serif;font-size:15px;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--dark);width:100%;margin-top:8px;transition:all .1s;}
+.btn:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--dark);}
+.btn:disabled{background:#aaa;cursor:not-allowed;transform:none;box-shadow:2px 2px 0 #666;}
+.btn.green{background:var(--green);}
+.codebox{background:var(--dark);color:var(--yellow);font-family:'Lora',serif;font-size:38px;font-weight:700;letter-spacing:10px;text-align:center;padding:14px;margin:10px 0;border:3px solid var(--amber);}
+.wplayer{display:flex;align-items:center;gap:10px;padding:7px 10px;border:2px solid var(--warm);background:rgba(139,94,60,.08);margin-bottom:5px;}
+.errmsg{font-size:13px;color:var(--red);text-align:center;margin:6px 0;}
+.infomsg{font-size:12px;color:var(--warm);text-align:center;margin:5px 0;font-style:italic;}
+/* GAME */
+#game{flex-direction:column;align-items:center;width:100%;}
+.ghead{background:var(--cream);border-bottom:4px double var(--warm);width:100%;display:flex;justify-content:space-between;align-items:center;padding:7px 14px;position:sticky;top:0;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.3);}
+.ghead h1{font-family:'Lora',serif;font-size:clamp(11px,2vw,16px);color:var(--dark);}
+.hright{display:flex;gap:6px;align-items:center;}
+.rbadge{background:var(--dark);color:var(--yellow);font-family:'Lora',serif;font-size:13px;font-weight:700;padding:4px 10px;letter-spacing:3px;border:2px solid var(--amber);}
+.sbtn{background:var(--dark);color:var(--cream);border:2px solid var(--ink);padding:5px 9px;font-family:'Patrick Hand',cursive;font-size:11px;cursor:pointer;box-shadow:2px 2px 0 var(--ink);}
+.glayout{display:grid;grid-template-columns:1fr 248px;gap:10px;width:100%;max-width:1080px;padding:10px;}
+@media(max-width:700px){.glayout{grid-template-columns:1fr;}}
+.bwrap{background:var(--paper);border:5px solid var(--warm);box-shadow:6px 6px 0 var(--dark);padding:10px;}
+.btitle{font-family:'Lora',serif;text-align:center;font-size:clamp(12px,2vw,16px);color:var(--dark);font-weight:700;margin-bottom:7px;border-bottom:3px double var(--warm);padding-bottom:5px;}
+#bsvg{width:100%;height:auto;display:block;}
+.side{display:flex;flex-direction:column;gap:8px;}
+.psec{background:var(--cream);border:3px solid var(--warm);padding:9px;box-shadow:3px 3px 0 var(--dark);}
+.psec h3{font-family:'Lora',serif;font-size:12px;color:var(--dark);border-bottom:2px dashed var(--amber);padding-bottom:3px;margin-bottom:7px;text-align:center;}
+.plist{display:flex;flex-direction:column;gap:5px;}
+.pcard{display:flex;align-items:center;gap:7px;padding:5px 7px;border:2px solid transparent;background:rgba(139,94,60,.08);border-radius:3px;font-size:12px;}
+.pcard.cur{border-color:var(--amber);background:rgba(212,131,58,.18);animation:puls 1.5s ease-in-out infinite;}
+.pcard.me{border-left:4px solid var(--green);}
+@keyframes puls{0%,100%{box-shadow:0 0 0 2px var(--yellow)}50%{box-shadow:0 0 0 4px var(--yellow)}}
+.pico{font-size:20px;}.pname{font-weight:bold;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.ppos{font-size:10px;color:var(--warm);}
+.darea{display:flex;gap:10px;justify-content:center;margin:7px 0;}
+.die{width:46px;height:46px;background:var(--cream);border:3px solid var(--warm);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:3px 3px 0 var(--dark);user-select:none;}
+.die.roll{animation:rdice .5s ease-in-out;}
+@keyframes rdice{0%{transform:rotate(0) scale(1)}25%{transform:rotate(90deg) scale(.8)}50%{transform:rotate(180deg) scale(1.2)}75%{transform:rotate(270deg) scale(.9)}100%{transform:rotate(360deg) scale(1)}}
+.rbtn{background:var(--green);color:white;border:3px solid var(--dark);padding:9px 14px;font-family:'Lora',serif;font-size:14px;font-weight:700;cursor:pointer;box-shadow:3px 3px 0 var(--dark);width:100%;}
+.rbtn:disabled{background:#aaa;cursor:not-allowed;}
+.waittxt{background:rgba(139,94,60,.12);border:2px dashed var(--warm);padding:9px;text-align:center;font-size:12px;color:var(--warm);font-family:'Lora',serif;font-style:italic;}
+.elog{max-height:150px;overflow-y:auto;font-size:11px;line-height:1.5;}
+.le{padding:3px 5px;border-left:3px solid transparent;margin-bottom:2px;}
+.le.ev{border-color:var(--amber);background:rgba(212,131,58,.1);}
+.le.mv{border-color:var(--green);background:rgba(107,156,90,.1);}
+.le.cd{border-color:var(--blue);background:rgba(74,127,165,.1);}
+.le.wn{border-color:var(--red);background:rgba(192,57,43,.15);font-weight:bold;}
+/* MODAL */
+.mover{display:none;position:fixed;inset:0;background:rgba(42,26,10,.85);z-index:100;justify-content:center;align-items:center;}
+.mover.show{display:flex;}
+.mbox{background:var(--cream);border:6px double var(--warm);padding:26px;max-width:390px;width:90%;box-shadow:10px 10px 0 var(--dark);text-align:center;animation:min .3s cubic-bezier(.175,.885,.32,1.275);}
+@keyframes min{from{transform:scale(.5) rotate(-5deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+.mico{font-size:54px;display:block;margin-bottom:7px;}
+.mtit{font-family:'Lora',serif;font-size:17px;font-weight:700;color:var(--dark);margin-bottom:5px;}
+.mtxt{font-size:13px;color:var(--ink);line-height:1.5;margin-bottom:10px;}
+.meff{font-family:'Lora',serif;font-style:italic;font-size:15px;color:var(--red);font-weight:700;margin-bottom:13px;}
+.mok{background:var(--warm);color:var(--cream);border:3px solid var(--dark);padding:9px 26px;font-family:'Lora',serif;font-size:14px;font-weight:700;cursor:pointer;box-shadow:4px 4px 0 var(--dark);}
+/* WIN */
+#win{display:none;position:fixed;inset:0;background:radial-gradient(ellipse at center,#f5ead0 0%,#d4a84a 50%,#8b5e3c 100%);z-index:200;justify-content:center;align-items:center;flex-direction:column;text-align:center;padding:20px;}
+#win.show{display:flex;}
+.wt{font-family:'Lora',serif;font-size:clamp(22px,6vw,44px);font-weight:700;color:var(--dark);}
+.wi{font-size:clamp(54px,14vw,92px);display:block;margin:10px auto;animation:sw 1s ease-out;}
+.wn2{font-size:clamp(18px,5vw,32px);color:var(--red);font-family:'Lora',serif;font-style:italic;}
+@keyframes sw{from{transform:rotate(-720deg) scale(0)}to{transform:rotate(0) scale(1)}}
+.conf{position:absolute;border-radius:2px;animation:fall linear forwards;}
+@keyframes fall{to{transform:translateY(110vh) rotate(720deg);opacity:0}}
+/* LOADING */
+#loading{display:none;position:fixed;inset:0;background:rgba(42,26,10,.92);z-index:300;justify-content:center;align-items:center;flex-direction:column;gap:16px;}
+#loading.show{display:flex;}
+.spin{width:48px;height:48px;border:5px solid var(--cream);border-top-color:var(--amber);border-radius:50%;animation:sp .8s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ltxt{color:var(--cream);font-family:'Lora',serif;font-size:18px;}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spin"></div><div class="ltxt" id="ltxt">Betöltés...</div></div>
+
+<!-- LOBBY -->
+<div id="lobby" class="screen active">
+  <div class="box">
+    <div class="gtitle">A Kérődzés Útja</div>
+    <div class="gsub">Multiplayer – egész osztálynak!</div>
+    <span class="cow">🐄</span>
+    <div class="tabs">
+      <button class="tab on" onclick="switchTab('create')">🏠 Szoba létrehozása</button>
+      <button class="tab" onclick="switchTab('join')">🚪 Csatlakozás</button>
+    </div>
+    <!-- CREATE -->
+    <div id="tc-create" class="tc on">
+      <div class="fg"><label>Neved:</label><input id="cname" placeholder="pl. Kovács Tanár Úr" maxlength="16"></div>
+      <div class="fg"><label>Állatfigura:</label>
+        <div class="animals" id="ca-sel">
+          <div class="aopt on" data-a="🐂" onclick="pickA(this,'c')">🐂</div>
+          <div class="aopt" data-a="🐴" onclick="pickA(this,'c')">🐴</div>
+          <div class="aopt" data-a="🐗" onclick="pickA(this,'c')">🐗</div>
+          <div class="aopt" data-a="🦌" onclick="pickA(this,'c')">🦌</div>
+          <div class="aopt" data-a="🐑" onclick="pickA(this,'c')">🐑</div>
+          <div class="aopt" data-a="🐪" onclick="pickA(this,'c')">🐪</div>
+        </div>
+      </div>
+      <div id="cerr" class="errmsg"></div>
+      <button class="btn" onclick="createRoom()">✦ Szoba létrehozása</button>
+    </div>
+    <!-- JOIN -->
+    <div id="tc-join" class="tc">
+      <div class="fg"><label>Szobakód (4 betű – a tanártól kapod):</label>
+        <input id="jcode" placeholder="ABCD" maxlength="4" style="text-transform:uppercase;font-size:24px;letter-spacing:8px;text-align:center;" oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <div class="fg"><label>Neved:</label><input id="jname" placeholder="pl. Kiss Béla" maxlength="16"></div>
+      <div class="fg"><label>Állatfigura:</label>
+        <div class="animals" id="ja-sel">
+          <div class="aopt on" data-a="🐂" onclick="pickA(this,'j')">🐂</div>
+          <div class="aopt" data-a="🐴" onclick="pickA(this,'j')">🐴</div>
+          <div class="aopt" data-a="🐗" onclick="pickA(this,'j')">🐗</div>
+          <div class="aopt" data-a="🦌" onclick="pickA(this,'j')">🦌</div>
+          <div class="aopt" data-a="🐑" onclick="pickA(this,'j')">🐑</div>
+          <div class="aopt" data-a="🐪" onclick="pickA(this,'j')">🐪</div>
+        </div>
+      </div>
+      <div id="jerr" class="errmsg"></div>
+      <button class="btn" onclick="joinRoom()">🚪 Belépés</button>
+    </div>
+    <!-- WAITING -->
+    <div id="tc-wait" class="tc">
+      <div class="infomsg">Szobakód – írd fel a táblára a diákoknak!</div>
+      <div class="codebox" id="dcode">----</div>
+      <div class="infomsg">Csatlakozott játékosok:</div>
+      <div id="wlist"></div>
+      <div class="infomsg" id="wstatus">Várakozás... (min. 2 fő kell)</div>
+      <button class="btn green" id="startbtn" onclick="hostStart()" disabled>▶ Játék indítása!</button>
+    </div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="game" class="screen">
+  <div class="ghead">
+    <h1>🐄 A Kérődzés Útja</h1>
+    <div class="hright">
+      <div class="rbadge" id="hcode">----</div>
+      <button class="sbtn" onclick="showRules()">📜 Szabályok</button>
+      <button class="sbtn" onclick="leaveGame()">✕ Kilép</button>
+    </div>
+  </div>
+  <div class="glayout">
+    <div class="bwrap">
+      <div class="btitle">A háziállatok emésztőrendszerének útja</div>
+      <svg id="bsvg" viewBox="0 0 560 520" xmlns="http://www.w3.org/2000/svg">
+        <rect width="560" height="520" fill="#ede0c4" rx="6"/>
+        <defs>
+          <radialGradient id="rg1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#8dbf6e"/><stop offset="100%" stop-color="#5a9245"/></radialGradient>
+          <radialGradient id="rg2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#d4a44a"/><stop offset="100%" stop-color="#b07a20"/></radialGradient>
+          <radialGradient id="rg3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#e87a5a"/><stop offset="100%" stop-color="#c04030"/></radialGradient>
+          <filter id="sh"><feDropShadow dx="2" dy="2" stdDeviation="2" flood-opacity="0.2"/></filter>
+          <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#c04030"/></marker>
+        </defs>
+        <ellipse cx="180" cy="240" rx="130" ry="100" fill="url(#rg1)" opacity="0.22"/>
+        <ellipse cx="180" cy="240" rx="130" ry="100" fill="none" stroke="#5a9245" stroke-width="2" stroke-dasharray="6,4" opacity="0.5"/>
+        <text x="108" y="164" font-family="Patrick Hand,cursive" font-size="12" fill="#3a6a25" font-weight="bold">🌿 BENDŐ (Rumen)</text>
+        <ellipse cx="290" cy="205" rx="52" ry="42" fill="url(#rg1)" opacity="0.18"/>
+        <ellipse cx="290" cy="205" rx="52" ry="42" fill="none" stroke="#4a7a35" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.4"/>
+        <text x="260" y="196" font-family="Patrick Hand,cursive" font-size="9" fill="#2a5a18">RECÉS-GYOMOR</text>
+        <ellipse cx="400" cy="290" rx="68" ry="48" fill="url(#rg2)" opacity="0.22"/>
+        <ellipse cx="400" cy="290" rx="68" ry="48" fill="none" stroke="#b07a20" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.5"/>
+        <text x="362" y="276" font-family="Patrick Hand,cursive" font-size="9" fill="#7a4a10">SZÁZRÉTŰ GYOMOR</text>
+        <ellipse cx="420" cy="418" rx="78" ry="54" fill="url(#rg3)" opacity="0.22"/>
+        <ellipse cx="420" cy="418" rx="78" ry="54" fill="none" stroke="#c04030" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.5"/>
+        <text x="382" y="400" font-family="Patrick Hand,cursive" font-size="9" fill="#900020">OLTÓGYOMOR</text>
+        <path d="M 255 258 Q 120 320 90 180" stroke="#c04030" stroke-width="2.5" fill="none" stroke-dasharray="8,5" marker-end="url(#arr)"/>
+        <text x="112" y="294" font-family="Patrick Hand,cursive" font-size="10" fill="#c04030" transform="rotate(-35,112,294)">↩ Kérődzés!</text>
+        <g id="cg"></g>
+        <g id="pg"></g>
+        <text x="28" y="480" font-size="14" opacity="0.3">🌾</text>
+        <text x="508" y="42" font-size="12" opacity="0.3">🥛</text>
+      </svg>
+    </div>
+    <div class="side">
+      <div class="psec">
+        <h3>🎯 Soron következő</h3>
+        <div id="curp" style="text-align:center;font-size:15px;font-family:'Lora',serif;color:var(--dark);padding:5px 0;"></div>
+        <div class="darea"><div class="die" id="d1">🎲</div><div class="die" id="d2">🎲</div></div>
+        <div id="rarea"></div>
+        <div id="dres" style="text-align:center;font-size:12px;color:var(--warm);margin-top:4px;min-height:15px;"></div>
+      </div>
+      <div class="psec"><h3>🐾 Játékosok</h3><div class="plist" id="pl"></div></div>
+      <div class="psec"><h3>📜 Eseménynapló</h3><div class="elog" id="elog"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="mover" id="modal">
+  <div class="mbox">
+    <span class="mico" id="mico">🃏</span>
+    <div class="mtit" id="mtit"></div>
+    <div class="mtxt" id="mtxt"></div>
+    <div class="meff" id="meff"></div>
+    <button class="mok" id="mok" onclick="closeModal()">✓ Rendben!</button>
+  </div>
+</div>
+
+<!-- RULES -->
+<div class="mover" id="rmod">
+  <div class="mbox" style="max-width:480px;text-align:left;max-height:80vh;overflow-y:auto;">
+    <div class="mtit" style="text-align:center;">📜 Szabályfüzet</div>
+    <div style="font-size:13px;line-height:1.8;">
+      <p><strong>🎯 Cél:</strong> Elsőként érj a 30. mezőre!</p><br>
+      <p><strong>🎲 Dobás:</strong> Csak a soron következő játékos dobhat.</p><br>
+      <p><strong>♦ Kártyás mező:</strong> Húzz és hajtsd végre az utasítást.</p><br>
+      <p><strong>↩ Kérődzés! (9, 14):</strong> Vissza a szájhoz (1. mező)!</p><br>
+      <p><strong>⏸ Labirintus (20):</strong> Kimaradsz 1 körből.</p><br>
+      <p><strong>🏆 Győzelem:</strong> Aki elsőként eléri a 30. mezőt!</p>
+    </div>
+    <button class="mok" onclick="document.getElementById('rmod').classList.remove('show')" style="margin-top:12px;display:block;width:100%;">✓ OK</button>
+  </div>
+</div>
+
+<!-- WIN -->
+<div id="win">
+  <div id="cconf"></div>
+  <span class="wi" id="wico">🏆</span>
+  <div class="wt">Gratulálok!</div>
+  <div class="wn2" id="wnam" style="margin:8px 0;"></div>
+  <p style="font-family:'Lora',serif;font-style:italic;color:var(--dark);max-width:360px;margin:8px auto;">Az étel sikeresen átjutott az összes gyomron!</p>
+  <button class="btn" style="max-width:240px;margin-top:18px;" onclick="leaveGame()">🔄 Főmenü</button>
+</div>
+
+<script>
+// ============================================================
+//  FIREBASE INIT
+// ============================================================
+const firebaseConfig = {
+  apiKey:            "AIzaSyD_placeholder_not_needed_for_rtdb",
+  authDomain:        "kerodzes-utja.firebaseapp.com",
+  databaseURL:       "https://kerodzes-utja-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "kerodzes-utja",
+};
+
+try {
+  firebase.initializeApp(firebaseConfig);
+} catch(e) { /* already initialized */ }
+
+const db = firebase.database();
+document.getElementById('loading').classList.remove('show'); // hide loading once SDK ready
+
+// ============================================================
+//  GAME DATA
+// ============================================================
+const CELLS = [
+  null,
+  {t:'start',   l:'RAJT\n🐄',       c:'#f5d06a',tc:'#4a2e1a'},
+  {t:'normal',  l:'2',               c:'#a8c97a'},
+  {t:'normal',  l:'3',               c:'#a8c97a'},
+  {t:'card',    l:'4\n♦',           c:'#4a7fa5',tc:'white'},
+  {t:'normal',  l:'5',               c:'#8dbf6e'},
+  {t:'normal',  l:'6',               c:'#8dbf6e'},
+  {t:'card',    l:'7\n♦',           c:'#4a7fa5',tc:'white'},
+  {t:'normal',  l:'8',               c:'#8dbf6e'},
+  {t:'ruminate',l:'9\n↩Kérődzés!',  c:'#c04030',tc:'white'},
+  {t:'normal',  l:'10',              c:'#7aaa5e'},
+  {t:'card',    l:'11\n♦',          c:'#4a7fa5',tc:'white'},
+  {t:'normal',  l:'12',              c:'#7aaa5e'},
+  {t:'card',    l:'13\n♦',          c:'#4a7fa5',tc:'white'},
+  {t:'ruminate',l:'14\n↩Kérődzés!', c:'#c04030',tc:'white'},
+  {t:'normal',  l:'15',              c:'#d4a44a'},
+  {t:'normal',  l:'16',              c:'#d4a44a'},
+  {t:'card',    l:'17\n♦',          c:'#4a7fa5',tc:'white'},
+  {t:'normal',  l:'18',              c:'#c8993a'},
+  {t:'card',    l:'19\n♦',          c:'#4a7fa5',tc:'white'},
+  {t:'skip',    l:'20\n⏸Labir.',    c:'#b07a20',tc:'white'},
+  {t:'normal',  l:'21',              c:'#c8993a'},
+  {t:'card',    l:'22\n♦',          c:'#4a7fa5',tc:'white'},
+  {t:'normal',  l:'23',              c:'#e07060'},
+  {t:'card',    l:'24\n♦',          c:'#4a7fa5',tc:'white'},
+  {t:'normal',  l:'25',              c:'#e87a5a'},
+  {t:'card',    l:'26\n♦',          c:'#4a7fa5',tc:'white'},
+  {t:'normal',  l:'27',              c:'#e87a5a'},
+  {t:'card',    l:'28\n♦',          c:'#4a7fa5',tc:'white'},
+  {t:'normal',  l:'29',              c:'#e07060'},
+  {t:'goal',    l:'CÉL!\n🎉',       c:'#c04030',tc:'white'},
+];
+
+const CARDS = [
+  {ico:'🐄',tit:'Kérődzés!',       txt:'A bendőd visszaküldi az ételt! Rágd meg újra.',    eff:'Vissza a szájhoz! (1. mező)',   act:'back'},
+  {ico:'🐄',tit:'Kérődzés!',       txt:'A recésgyomor visszaküldte az ételt.',              eff:'Vissza a szájhoz! (1. mező)',   act:'back'},
+  {ico:'🐄',tit:'Kérődzés!',       txt:'A százrétű gyomor visszaküldi az ételt.',           eff:'Vissza a szájhoz! (1. mező)',   act:'back'},
+  {ico:'🐴',tit:'Ló vagy!',        txt:'Egyszerű gyomrod van, nincs kérődzés!',             eff:'Előre 3 mezőt! 🏇',             act:'fwd', val:3},
+  {ico:'🐷',tit:'Mindenevő!',      txt:'A gumós zápfogaddal mindent megrágsz.',             eff:'Előre 2 mezőt! 🐷',             act:'fwd', val:2},
+  {ico:'🦌',tit:'Gyors patás!',    txt:'Az emésztésed felgyorsul!',                         eff:'Előre 4 mezőt! 🦌',             act:'fwd', val:4},
+  {ico:'🎯',tit:'Oltógyomor exp.!',txt:'A savak gyorsan bontják az ételt!',                 eff:'Előre 5 mezőt! 🎯',             act:'fwd', val:5},
+  {ico:'🌾',tit:'Száraz széna!',   txt:'Nehéz emésztés, pihenni kell.',                     eff:'Kimaradsz 1 körből! 🌾',        act:'skip'},
+  {ico:'🌾',tit:'Zab és rozs!',    txt:'Tele gyomor – lassabban mész.',                     eff:'Vissza 2 mezőt!',               act:'bwd', val:2},
+  {ico:'💨',tit:'Böfögés!',        txt:'A bendőd gázokat termel – dobjál újra!',            eff:'Dobhatsz még egyszer! 💨',      act:'reroll'},
+  {ico:'🌿',tit:'Friss fű!',       txt:'Sok tápanyag! Következő körben bónusz.',            eff:'Következő körben +1 lépés! 🌿', act:'bonus', val:1},
+  {ico:'🐮',tit:'Tehéntej!',       txt:'Kalciumban gazdag, erősödsz!',                      eff:'Előre 3 mezőt! 🐮',             act:'fwd', val:3},
+];
+
+function mkDeck(){
+  const d=[...CARDS,...CARDS.slice(0,6)];
+  for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]];}
+  return d;
+}
+
+function buildPath(){
+  const p=[];
+  for(let i=0;i<8;i++) p.push({x:80+i*60,y:55});
+  for(let i=1;i<=7;i++) p.push({x:500,y:55+i*52});
+  for(let i=1;i<=7;i++) p.push({x:500-i*60,y:419});
+  for(let i=0;i<8;i++) p.push({x:80+i*60,y:471});
+  return p;
+}
+
+// ============================================================
+//  STATE
+// ============================================================
+let myId=null, myRoom=null, isHost=false;
+let cellPos=[], modalCb=null, lastTs=0;
+let animalC='🐂', animalJ='🐂';
+let roomRef=null;
+
+// ============================================================
+//  UI HELPERS
+// ============================================================
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function loading(show,txt='Betöltés...'){
+  document.getElementById('ltxt').textContent=txt;
+  document.getElementById('loading').classList.toggle('show',show);
+}
+function switchTab(t){
+  ['create','join','wait'].forEach(n=>{
+    document.getElementById('tc-'+n).classList.toggle('on',n===t);
+  });
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('on',['create','join'][i]===t));
+}
+function pickA(el,ctx){
+  document.querySelectorAll(`#${ctx==='c'?'ca':'ja'}-sel .aopt`).forEach(o=>o.classList.remove('on'));
+  el.classList.add('on');
+  if(ctx==='c') animalC=el.dataset.a; else animalJ=el.dataset.a;
+}
+function genCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ';return Array.from({length:4},()=>c[Math.floor(Math.random()*c.length)]).join('');}
+function genId(){return Math.random().toString(36).substr(2,9)+Date.now().toString(36);}
+
+// ============================================================
+//  CREATE ROOM
+// ============================================================
+async function createRoom(){
+  const name=document.getElementById('cname').value.trim();
+  if(!name){document.getElementById('cerr').textContent='Kérlek adj meg egy nevet!';return;}
+  document.getElementById('cerr').textContent='';
+  loading(true,'Szoba létrehozása...');
+  myId=genId(); isHost=true;
+  const code=genCode();
+  myRoom=code;
+  const roomData={
+    host:myId, status:'waiting',
+    players:{[myId]:{name,icon:animalC,position:1,skipTurns:0,bonusNext:0,order:0}},
+    currentPlayerIdx:0, deck:mkDeck(), log:[], lastAction:null,
+  };
+  await db.ref('rooms/'+code).set(roomData);
+  loading(false);
+  document.getElementById('dcode').textContent=code;
+  document.getElementById('hcode').textContent=code;
+  switchTab('wait');
+  listenLobby(code);
+}
+
+// ============================================================
+//  JOIN ROOM
+// ============================================================
+async function joinRoom(){
+  const code=document.getElementById('jcode').value.trim().toUpperCase();
+  const name=document.getElementById('jname').value.trim();
+  if(code.length!==4){document.getElementById('jerr').textContent='4 betűs kód kell!';return;}
+  if(!name){document.getElementById('jerr').textContent='Add meg a neved!';return;}
+  document.getElementById('jerr').textContent='';
+  loading(true,'Szoba keresése...');
+  const snap=await db.ref('rooms/'+code).get();
+  if(!snap.exists()){loading(false);document.getElementById('jerr').textContent='Nincs ilyen szoba!';return;}
+  const room=snap.val();
+  if(room.status==='finished'){loading(false);document.getElementById('jerr').textContent='Ez a játék már véget ért.';return;}
+  myId=genId(); isHost=false; myRoom=code;
+  const order=Object.keys(room.players||{}).length;
+  await db.ref('rooms/'+code+'/players/'+myId).set({name,icon:animalJ,position:1,skipTurns:0,bonusNext:0,order});
+  loading(false);
+  document.getElementById('hcode').textContent=code;
+  document.getElementById('startbtn').disabled=true;
+  if(room.status==='playing'){
+    showScreen('game'); drawBoard(); listenGame(code);
+  } else {
+    switchTab('wait'); listenLobby(code);
+  }
+}
+
+// ============================================================
+//  LOBBY LISTENER
+// ============================================================
+function listenLobby(code){
+  db.ref('rooms/'+code).on('value',snap=>{
+    if(!snap.exists()) return;
+    const room=snap.val();
+    renderWaiting(room.players||{});
+    if(room.status==='playing'){
+      db.ref('rooms/'+code).off();
+      showScreen('game'); drawBoard(); listenGame(code);
+    }
+  });
+}
+function renderWaiting(players){
+  const arr=Object.values(players).sort((a,b)=>a.order-b.order);
+  document.getElementById('wlist').innerHTML=arr.map(p=>`<div class="wplayer"><span style="font-size:22px">${p.icon}</span><span>${p.name}</span></div>`).join('');
+  document.getElementById('wstatus').textContent=`${arr.length} játékos csatlakozott${arr.length<2?' (min. 2 fő)':''}`;
+  document.getElementById('startbtn').disabled=arr.length<2||!isHost;
+}
+async function hostStart(){
+  if(!isHost) return;
+  await db.ref('rooms/'+myRoom+'/status').set('playing');
+}
+
+// ============================================================
+//  GAME LISTENER
+// ============================================================
+function listenGame(code){
+  roomRef=db.ref('rooms/'+code);
+  roomRef.on('value',snap=>{
+    if(!snap.exists()) return;
+    onState(snap.val());
+  });
+}
+
+function sortP(players){
+  return Object.entries(players).sort((a,b)=>a[1].order-b[1].order).map(([id,p])=>({id,...p}));
+}
+
+function onState(room){
+  if(!room) return;
+  if(room.status==='finished'){if(room.winner) showWin(room.winner); return;}
+  const players=sortP(room.players||{});
+  const cidx=room.currentPlayerIdx||0;
+  renderPlayers(players,cidx);
+  renderPawns(players,cidx);
+  document.getElementById('curp').textContent=players[cidx]?`${players[cidx].icon} ${players[cidx].name}`:'';
+  renderRoll(players,cidx);
+  if(room.log) renderLog(room.log);
+  const a=room.lastAction;
+  if(a&&a.ts&&a.ts!==lastTs) handleAction(room,players,cidx);
+}
+
+function renderRoll(players,cidx){
+  const area=document.getElementById('rarea');
+  const isme=players[cidx]&&players[cidx].id===myId;
+  if(isme){
+    area.innerHTML='<button class="rbtn" id="rbtn" onclick="doRoll()">🎲 Dobás!</button>';
+  } else {
+    const p=players[cidx];
+    area.innerHTML=`<div class="waittxt">⏳ ${p?p.name:''} dobása...</div>`;
+  }
+}
+
+// ============================================================
+//  DICE & MOVE
+// ============================================================
+const FACES=['⚀','⚁','⚂','⚃','⚄','⚅'];
+async function doRoll(){
+  const btn=document.getElementById('rbtn');
+  if(btn) btn.disabled=true;
+  const d1=document.getElementById('d1'),d2=document.getElementById('d2');
+  d1.classList.add('roll'); d2.classList.add('roll');
+  let t=0;
+  const anim=setInterval(()=>{
+    d1.textContent=FACES[Math.floor(Math.random()*6)];
+    d2.textContent=FACES[Math.floor(Math.random()*6)];
+    if(++t>8){
+      clearInterval(anim);
+      d1.classList.remove('roll'); d2.classList.remove('roll');
+      const v1=Math.ceil(Math.random()*6),v2=Math.ceil(Math.random()*6);
+      d1.textContent=FACES[v1-1]; d2.textContent=FACES[v2-1];
+      processMove(v1,v2);
+    }
+  },80);
+}
+
+async function processMove(v1,v2){
+  const snap=await db.ref('rooms/'+myRoom).get();
+  const room=snap.val(); if(!room) return;
+  const players=sortP(room.players||{});
+  const cidx=room.currentPlayerIdx||0;
+  const me=players[cidx];
+  if(!me||me.id!==myId) return;
+
+  if(me.skipTurns>0){
+    const nextIdx=(cidx+1)%players.length;
+    await db.ref('rooms/'+myRoom).update({
+      [`players/${me.id}/skipTurns`]:me.skipTurns-1,
+      currentPlayerIdx:nextIdx,
+      log:[...(room.log||[]),`⏸ ${me.name} kimarad`].slice(-30),
+      lastAction:{type:'skip',ts:Date.now()}
+    });
+    return;
+  }
+
+  let total=v1+v2+(me.bonusNext||0);
+  document.getElementById('dres').textContent=`🎲 ${v1}+${v2}=${total} lépés`;
+  const newPos=Math.min(me.position+total,30);
+  const newLog=[...(room.log||[]),`${me.icon} ${me.name}: +${total} → ${newPos}. mező`].slice(-30);
+
+  if(newPos>=30){
+    await db.ref('rooms/'+myRoom).update({
+      [`players/${me.id}/position`]:30,
+      [`players/${me.id}/bonusNext`]:0,
+      status:'finished',winner:{name:me.name,icon:me.icon},
+      log:[...newLog,`🏆 ${me.name} NYERT!`],
+      lastAction:{type:'win',ts:Date.now()}
+    });
+    return;
+  }
+
+  const cell=CELLS[newPos];
+  let deck=[...(room.deck||mkDeck())];
+  let action={type:'move',pos:newPos,cell:cell.t,pid:me.id,ts:Date.now()};
+
+  if(cell.t==='card'){
+    if(deck.length===0) deck=mkDeck();
+    const card=deck.pop();
+    action={type:'card',pos:newPos,card,pid:me.id,ts:Date.now()};
+    await db.ref('rooms/'+myRoom).update({
+      [`players/${me.id}/position`]:newPos,[`players/${me.id}/bonusNext`]:0,
+      deck,log:newLog,lastAction:action
+    });
+  } else if(cell.t==='ruminate'){
+    await db.ref('rooms/'+myRoom).update({
+      [`players/${me.id}/position`]:newPos,[`players/${me.id}/bonusNext`]:0,
+      log:newLog,lastAction:{type:'ruminate',pid:me.id,ts:Date.now()}
+    });
+  } else if(cell.t==='skip'){
+    await db.ref('rooms/'+myRoom).update({
+      [`players/${me.id}/position`]:newPos,[`players/${me.id}/bonusNext`]:0,
+      log:newLog,lastAction:{type:'cellskip',pid:me.id,ts:Date.now()}
+    });
+  } else {
+    const nextIdx=(cidx+1)%players.length;
+    await db.ref('rooms/'+myRoom).update({
+      [`players/${me.id}/position`]:newPos,[`players/${me.id}/bonusNext`]:0,
+      currentPlayerIdx:nextIdx,log:newLog,lastAction:{type:'done',ts:Date.now()}
+    });
+  }
+}
+
+// ============================================================
+//  HANDLE ACTIONS
+// ============================================================
+function handleAction(room,players,cidx){
+  const a=room.lastAction; if(!a||!a.ts) return;
+  lastTs=a.ts;
+  const me=players[cidx];
+  const isMyTurn=me&&me.id===myId;
+
+  if(a.type==='ruminate'){
+    showModal('↩','🐄 Kérődzés!','A bendőd visszaküldi az ételt! Rágd meg újra!','Vissza a szájhoz! (1. mező)',async()=>{
+      if(!isMyTurn) return;
+      const nextIdx=(cidx+1)%players.length;
+      await db.ref('rooms/'+myRoom).update({
+        [`players/${me.id}/position`]:1,currentPlayerIdx:nextIdx,
+        log:[...(room.log||[]),`↩ ${me.name} vissza a szájhoz!`].slice(-30),
+        lastAction:{type:'done',ts:Date.now()}
+      });
+    },isMyTurn);
+  } else if(a.type==='cellskip'){
+    showModal('⏸','Százrétű labirintus!','Elvesztél a lemezek között!','Kimaradsz 1 körből! ⏸',async()=>{
+      if(!isMyTurn) return;
+      const nextIdx=(cidx+1)%players.length;
+      await db.ref('rooms/'+myRoom).update({
+        [`players/${me.id}/skipTurns`]:(me.skipTurns||0)+1,currentPlayerIdx:nextIdx,
+        lastAction:{type:'done',ts:Date.now()}
+      });
+    },isMyTurn);
+  } else if(a.type==='card'){
+    const card=a.card;
+    showModal(card.ico,card.tit,card.txt,card.eff,async()=>{
+      if(!isMyTurn) return;
+      await applyCard(card,me,players,cidx,room);
+    },isMyTurn);
+  }
+}
+
+async function applyCard(card,me,players,cidx,room){
+  const nextIdx=(cidx+1)%players.length;
+  const log=room.log||[];
+  let upd={lastAction:{type:'done',ts:Date.now()}};
+  if(card.act==='back'){
+    upd[`players/${me.id}/position`]=1; upd.currentPlayerIdx=nextIdx;
+    upd.log=[...log,`↩ ${me.name} vissza a szájhoz!`].slice(-30);
+  } else if(card.act==='fwd'){
+    const np=Math.min(me.position+card.val,30);
+    upd[`players/${me.id}/position`]=np; upd.currentPlayerIdx=nextIdx;
+    upd.log=[...log,`➡ ${me.name} előre ${card.val}`].slice(-30);
+    if(np>=30){upd.status='finished';upd.winner={name:me.name,icon:me.icon};}
+  } else if(card.act==='bwd'){
+    upd[`players/${me.id}/position`]=Math.max(me.position-card.val,1); upd.currentPlayerIdx=nextIdx;
+    upd.log=[...log,`⬅ ${me.name} vissza ${card.val}`].slice(-30);
+  } else if(card.act==='skip'){
+    upd[`players/${me.id}/skipTurns`]=(me.skipTurns||0)+1; upd.currentPlayerIdx=nextIdx;
+    upd.log=[...log,`⏸ ${me.name} kimarad 1 körből`].slice(-30);
+  } else if(card.act==='bonus'){
+    upd[`players/${me.id}/bonusNext`]=(me.bonusNext||0)+card.val; upd.currentPlayerIdx=nextIdx;
+    upd.log=[...log,`🌿 ${me.name} +${card.val} következő körben`].slice(-30);
+  } else if(card.act==='reroll'){
+    upd.log=[...log,`💨 ${me.name} újra dobhat!`].slice(-30);
+    // nem lép tovább a sor
+  } else {
+    upd.currentPlayerIdx=nextIdx;
+  }
+  await db.ref('rooms/'+myRoom).update(upd);
+}
+
+// ============================================================
+//  BOARD DRAWING
+// ============================================================
+function drawBoard(){
+  cellPos=buildPath();
+  const cg=document.getElementById('cg'); cg.innerHTML='';
+  const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+  poly.setAttribute('points',cellPos.map(p=>p.x+','+p.y).join(' '));
+  poly.setAttribute('fill','none');poly.setAttribute('stroke','#8b5e3c');
+  poly.setAttribute('stroke-width','3');poly.setAttribute('stroke-dasharray','6,4');poly.setAttribute('opacity','0.3');
+  cg.appendChild(poly);
+  cellPos.forEach(({x,y},idx)=>{
+    const ci=idx+1,cell=CELLS[ci]; if(!cell) return;
+    const r=(cell.t==='start'||cell.t==='goal')?27:23;
+    const circ=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circ.setAttribute('cx',x);circ.setAttribute('cy',y);circ.setAttribute('r',r);
+    circ.setAttribute('fill',cell.c||'#d4c89a');circ.setAttribute('stroke','#4a2e1a');
+    circ.setAttribute('stroke-width',cell.t==='ruminate'?'3':'1.5');
+    if(cell.t==='card'){circ.setAttribute('stroke','#2a5a85');circ.setAttribute('stroke-dasharray','4,2');}
+    cg.appendChild(circ);
+    const lines=cell.l.split('\n');
+    [[lines[0],y+(lines.length>1?-5:4),'12'],[lines[1]&&lines[1],y+9,'7']].forEach(([txt,cy,fs])=>{
+      if(!txt) return;
+      const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',x);t.setAttribute('y',cy);t.setAttribute('text-anchor','middle');
+      t.setAttribute('font-family','Patrick Hand,cursive');t.setAttribute('font-size',cell.t==='start'||cell.t==='goal'?'10':fs);
+      t.setAttribute('font-weight','bold');t.setAttribute('fill',cell.tc||'#2c1a0e');
+      t.textContent=txt; cg.appendChild(t);
+    });
+  });
+}
+
+function renderPawns(players,cidx){
+  const pg=document.getElementById('pg'); pg.innerHTML='';
+  const offs=[{x:-10,y:-10},{x:10,y:-10},{x:-10,y:10},{x:10,y:10},{x:0,y:-16},{x:16,y:0}];
+  players.forEach((p,pi)=>{
+    const ci=Math.min(p.position-1,cellPos.length-1);
+    const pos=cellPos[ci]; if(!pos) return;
+    const off=offs[pi%offs.length];
+    if(pi===cidx){
+      const ring=document.createElementNS('http://www.w3.org/2000/svg','circle');
+      ring.setAttribute('cx',pos.x+off.x);ring.setAttribute('cy',pos.y+off.y-6);
+      ring.setAttribute('r','13');ring.setAttribute('fill','none');
+      ring.setAttribute('stroke','#e8c84a');ring.setAttribute('stroke-width','2.5');
+      pg.appendChild(ring);
+    }
+    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',pos.x+off.x);t.setAttribute('y',pos.y+off.y);
+    t.setAttribute('text-anchor','middle');t.setAttribute('font-size','17');
+    t.setAttribute('filter','url(#sh)');t.textContent=p.icon; pg.appendChild(t);
+  });
+}
+
+function renderPlayers(players,cidx){
+  document.getElementById('pl').innerHTML=players.map((p,i)=>`
+    <div class="pcard${i===cidx?' cur':''}${p.id===myId?' me':''}">
+      <span class="pico">${p.icon}</span>
+      <div><div class="pname">${p.name}${p.id===myId?' (én)':''}</div>
+      <div class="ppos">${p.position}. mező${p.skipTurns>0?' ⏸':''}</div></div>
+    </div>`).join('');
+}
+
+function renderLog(log){
+  const el=document.getElementById('elog');
+  el.innerHTML=log.map(e=>{
+    let c='ev';
+    if(e.includes('→')) c='mv';
+    if(e.includes('↩')||e.includes('➡')||e.includes('⬅')) c='cd';
+    if(e.includes('🏆')) c='wn';
+    return `<div class="le ${c}">${e}</div>`;
+  }).join('');
+  el.scrollTop=el.scrollHeight;
+}
+
+// ============================================================
+//  MODAL
+// ============================================================
+function showModal(ico,tit,txt,eff,cb,showBtn=true){
+  document.getElementById('mico').textContent=ico;
+  document.getElementById('mtit').textContent=tit;
+  document.getElementById('mtxt').textContent=txt;
+  document.getElementById('meff').textContent=eff;
+  modalCb=cb;
+  document.getElementById('mok').style.display=showBtn?'':'none';
+  document.getElementById('modal').classList.add('show');
+  if(!showBtn) setTimeout(()=>{document.getElementById('modal').classList.remove('show');},3500);
+}
+function closeModal(){
+  document.getElementById('modal').classList.remove('show');
+  if(modalCb){const cb=modalCb;modalCb=null;cb();}
+}
+function showRules(){document.getElementById('rmod').classList.add('show');}
+
+// ============================================================
+//  WIN
+// ============================================================
+function showWin(w){
+  if(roomRef) roomRef.off();
+  document.getElementById('wico').textContent=w.icon;
+  document.getElementById('wnam').textContent=`🏆 ${w.name} nyert!`;
+  document.getElementById('win').classList.add('show');
+  const c=document.getElementById('cconf');
+  const cols=['#d4833a','#6b9c5a','#4a7fa5','#e8c84a','#c04030'];
+  for(let i=0;i<60;i++){
+    const d=document.createElement('div');d.className='conf';
+    d.style.cssText=`position:absolute;left:${Math.random()*100}vw;top:-20px;background:${cols[Math.floor(Math.random()*5)]};width:${6+Math.random()*10}px;height:${6+Math.random()*10}px;border-radius:2px;animation:fall ${1.5+Math.random()*3}s ${Math.random()*2}s linear forwards`;
+    c.appendChild(d);
+  }
+}
+
+function leaveGame(){
+  if(roomRef){roomRef.off();roomRef=null;}
+  document.getElementById('win').classList.remove('show');
+  document.getElementById('cconf').innerHTML='';
+  document.getElementById('d1').textContent='🎲';
+  document.getElementById('d2').textContent='🎲';
+  document.getElementById('elog').innerHTML='';
+  lastTs=0;myId=null;myRoom=null;isHost=false;
+  showScreen('lobby');switchTab('create');
+}
+</script>
+</body>
+</html>
